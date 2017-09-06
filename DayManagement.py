@@ -1,12 +1,11 @@
 import sys
-import os
-import vlc
 from datetime import datetime, time
 from functools import partial
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QApplication, QGridLayout, QLabel, QPushButton, QHBoxLayout, QLineEdit, QTextEdit, \
-    QDialog, QVBoxLayout, QWidgetItem, QMessageBox, QMainWindow
+    QDialog, QVBoxLayout, QWidgetItem, QMessageBox, QMainWindow, QRadioButton
 import time as stime
+import sort_util
 
 sort_task_list = []
 
@@ -17,6 +16,7 @@ class TimeThread(QThread):
     """
     # 일반적으로 pyqt5에서는 메인 쓰레드가 아닌 경우에는 pyqt5의 messagebox나 새로운 윈도우창을 키는 행동을 할수가 없다
     # 그래서 message 박스를 불러오는 통로 같은것을 만드는 것
+
     messagebox = pyqtSignal()
     latest_time_hour = 0
     latest_time_minute = 0
@@ -28,8 +28,9 @@ class TimeThread(QThread):
         self.wait()
 
     def latest_task_time(self):
+        global sort_task_list
         # task_list의 첫 번쨰 키를 : 스플릿 함
-        latest_time_keys = list(DayManagement.task_list[0].keys())[0].split(':')
+        latest_time_keys = list(sort_task_list[0].keys())[0].split(':')
         # self.am_pm_toggle_value가 PM 이면 12를 더해줘여함 datetime에서 1시는 13시로 표현함
         if latest_time_keys[0] == 'PM':
             self.latest_time_hour = int(latest_time_keys[1]) + 12
@@ -45,9 +46,10 @@ class TimeThread(QThread):
 
     # TimeThread를 .start() 를하면 실행되는 함수
     def run(self):
+        global sort_task_list
         # 시간을 체크함
         while True:
-            if DayManagement.task_list == []:
+            if sort_task_list == []:
                 break
             # 제일 처음 task의 시간, 분 을 받아옴
             hour, minute = self.latest_task_time()
@@ -55,11 +57,9 @@ class TimeThread(QThread):
             # 현재시각이랑 비교해서 현재시각이 더 크면 메세지 박스 불러옴
             if datetime.today().time() >= time(hour, minute):
                 # 메인 view에서 messagebox와 connect와 연결된 함수를 싱햄
-                print(time(hour, minute))
-                print(datetime.today().time())
                 self.messagebox.emit()
                 # os.system('open /Users/goseonghyeon/study/ScheduleManagement/black.mp3')
-                DayManagement.task_list.pop(0)
+                sort_task_list.pop(0)
 
 
 class DayManagement(QWidget):
@@ -174,8 +174,8 @@ class DayManagement(QWidget):
 
         # 시간과 할일을 task_list에 저장한다
         self.task_list.append(time_and_task)
-        sort_task_list = self.task_list_sort(self.task_list)
-        # task_list를 pm
+
+        sort_task_list = sort_util.task_list_sort(self.task_list)
 
         # 시간과 할일을 저장 후에 text 칸을 clear 시킨다
         self.set_time_hours.clear()
@@ -207,48 +207,6 @@ class DayManagement(QWidget):
             self.am_or_pm_toggle_button.setText('PM')
             self.am_pm_toggle_value = 'PM'
 
-    def sort_key_dict_fuction(self, task):
-        '''
-        task_list에 key를 뺴와서 time으로 리턴해서 sort 하는 함수
-        '''
-        # task의 keys를[0] :를 기준으로 나눠서 am_pm, hour, minute
-        time_h_s = list(task.keys())[0].split(':')
-        hour = int(time_h_s[1])
-        minute = int(time_h_s[2])
-        return time(hour, minute)
-
-    def task_list_sort(self, task_list):
-        """
-        task_list 를 pm, am으로 리스트를 나누어서 정렬함
-        """
-        pm_task_list = []
-        am_task_list = []
-        # am 은 pm을 나눠서 각 리스트에 정렬
-        for task in task_list:
-            task_am_or_pm = list(task.keys())[0].split(':')[0]
-            if task_am_or_pm == 'PM':
-                pm_task_list.append(task)
-            elif task_am_or_pm == 'AM':
-                am_task_list.append(task)
-
-        # pm_task_list == [] 이면 am_task_list만 출력
-        if pm_task_list == []:
-            am_task_list.sort(key=self.sort_key_dict_fuction)
-            return am_task_list
-        # am_task_list == [] 이면 pm_task_list만 출력
-        elif am_task_list == []:
-            pm_task_list.sort(key=self.sort_key_dict_fuction)
-            return pm_task_list
-        # 12시 이상이면 pm_task_list 가 먼저 옴
-        elif datetime.today().time().hour >= 12:
-            am_task_list.sort(key=self.sort_key_dict_fuction)
-            pm_task_list.sort(key=self.sort_key_dict_fuction)
-            return pm_task_list + am_task_list
-        else:
-            am_task_list.sort(key=self.sort_key_dict_fuction)
-            pm_task_list.sort(key=self.sort_key_dict_fuction)
-            return am_task_list + pm_task_list
-
 
 class TaskList(QWidget):
     '''
@@ -256,9 +214,20 @@ class TaskList(QWidget):
     '''
     # 할일 목록을 할당
     global sort_task_list
+    # 수정할 때 인덱스를 이용해서 수정하기 위해 모든 ui를 딕으로 만듬
+    task_list_wrap_layout = {}
+    task_list_top_layout = {}
+    task_list_button_layout = {}
+    task_time_hours = {}
+    task_time_minutes = {}
+    am_or_pm_toggle_button = {}
+    text = {}
+    task_list_delete_button = {}
+    task_list_modified_button = {}
     def __init__(self):
         super().__init__()
         self.grid = QGridLayout()
+        print(sort_task_list)
         # 할일 목록 하나당 배정함
         for index, task in enumerate(sort_task_list):
             # 각 할 일 마다 am_or_pm, hours, minutes 구함
@@ -266,76 +235,107 @@ class TaskList(QWidget):
             # 할 일을 구함
             task = list(task.values())[0]
             # 모든 레이아웃을 감쌀 수직 레이아웃
-            self.task_list_wrap_layout = QVBoxLayout()
+            self.task_list_wrap_layout[index] = QVBoxLayout()
             # ex)AM:시간:분을 감싸는 수평 레이아웃
-            self.task_list_top_layout = QHBoxLayout()
+            self.task_list_top_layout[index] = QHBoxLayout()
             # 삭제, 수정 버튼을 감싸는 수평 레이아웃
-            self.task_list_button_layout = QHBoxLayout()
+            self.task_list_button_layout[index] = QHBoxLayout()
 
             # 시간, 분을 넣을 text창
-            self.task_time_hours = QLineEdit()
-            self.task_time_minutes = QLineEdit()
+            self.task_time_hours[index] = QLineEdit()
+            self.task_time_minutes[index] = QLineEdit()
 
+            # task의 PM이면 토글버튼에 PM, AM이면 AM 설정
+            if am_or_pm == 'PM':
+                self.am_or_pm_toggle_button[index] = QPushButton("PM")
+            elif am_or_pm == 'AM':
+                self.am_or_pm_toggle_button[index] = QPushButton("AM")
+            # am_or_pm_toggle_button을 토글버튼으로 만듬
+            self.am_or_pm_toggle_button[index].setCheckable(True)
+
+            # am_or_pm_toggle_button을 self.am_pm_toggle 함수랑 연경하고 index를 인자로 줌
+            self.am_or_pm_toggle_button[index].clicked.connect(partial(self.am_pm_toggle, index))
             # hours을 task_time_hours을 text창에 할당, minutes을 task_time_minutes을 text 창에 할당
-            self.task_time_hours.setText(hours)
-            self.task_time_minutes.setText(minutes)
+            self.task_time_hours[index].setText(hours)
+            self.task_time_minutes[index].setText(minutes)
 
             # 크기 조정
-            self.task_time_hours.setMaximumSize(25, 20)
-            self.task_time_minutes.setMaximumSize(25, 20)
+            self.task_time_hours[index].setMaximumSize(25, 20)
+            self.task_time_minutes[index].setMaximumSize(25, 20)
 
             # task_list_top_layuout에 ex)AM:hour:minute을 설정
-            self.task_list_top_layout.addWidget(QLabel(am_or_pm))
-            self.task_list_top_layout.addWidget(self.task_time_hours)
-            self.task_list_top_layout.addWidget(QLabel(":"))
-            self.task_list_top_layout.addWidget(self.task_time_minutes)
+            self.task_list_top_layout[index].addWidget(self.am_or_pm_toggle_button[index])
+            self.task_list_top_layout[index].addWidget(self.task_time_hours[index])
+            self.task_list_top_layout[index].addWidget(QLabel(":"))
+            self.task_list_top_layout[index].addWidget(self.task_time_minutes[index])
 
             # task_list_top_layout오른쪾에 빈 공간을 만듬
-            self.task_list_top_layout.addStretch()
+            self.task_list_top_layout[index].addStretch()
 
             # 큰 text 창을 생성
-            self.text = QTextEdit()
+            self.text[index] = QTextEdit()
             # task를 text에 할당
-            self.text.setPlainText(task)
+            self.text[index].setPlainText(task)
 
             # 삭제, 수정 버튼
-            self.task_list_delete_button = QPushButton('Delete', self)
-            self.task_list_modified_button = QPushButton('Modified', self)
+            self.task_list_delete_button[index] = QPushButton('Delete')
+            self.task_list_modified_button[index] = QPushButton('Modified')
 
             # 수정 버튼을 task_modified 함수에 할당 인자를 주기위해 partial 사용
-            self.task_list_modified_button.clicked.connect(partial(self.task_modified, index))
-            self.task_list_delete_button.clicked.connect(
-                partial(self.task_delete, self.task_list_wrap_layout, index, True))
+            self.task_list_modified_button[index].clicked.connect(partial(self.task_modified,index))
+            self.task_list_delete_button[index].clicked.connect( \
+                partial(self.task_delete, self.task_list_wrap_layout[index], index, True))
 
             # task_list_button_lalyout에 삭제, 수정 버튼을 추가
-            self.task_list_button_layout.addWidget(self.task_list_delete_button)
-            self.task_list_button_layout.addWidget(self.task_list_modified_button)
+            self.task_list_button_layout[index].addWidget(self.task_list_delete_button[index])
+            self.task_list_button_layout[index].addWidget(self.task_list_modified_button[index])
 
             # task_list_wrap_layout(전체를 감싸는 layout)에 task_list_top_layout, text, task_list_button_layout을 추가
-            self.task_list_wrap_layout.addLayout(self.task_list_top_layout)
-            self.task_list_wrap_layout.addWidget(self.text)
-            self.task_list_wrap_layout.addLayout(self.task_list_button_layout)
+            self.task_list_wrap_layout[index].addLayout(self.task_list_top_layout[index])
+            self.task_list_wrap_layout[index].addWidget(self.text[index])
+            self.task_list_wrap_layout[index].addLayout(self.task_list_button_layout[index])
 
             # task_list_wrap_layout을 grid레이아웃에 추가
-            self.grid.addLayout(self.task_list_wrap_layout, index, 0)
+            self.grid.addLayout(self.task_list_wrap_layout[index], index, 0)
 
         self.setLayout(self.grid)
         self.show()
 
-    def task_modified(self, index):
+    def am_pm_toggle(self, index, toggle):
+        '''
+        self.am_or_pm_toggle_button을 클릭하면 실행되는 함수로 AM PM을 설정한다
+        '''
+        # toggle 순서가 가장 마지막이라서 index를 두번쨰에 줘야함 안그러면 index가 토글 역할을 해버림
+        if toggle:
+            # am_or_pm_toggle_buotton버튼의 텍스를 AM으로 변경
+            self.am_or_pm_toggle_button[index].setText('AM')
+        else:
+            # am_or_pm_toggle_buotton버튼의 텍스를 PM으로 변경
+            self.am_or_pm_toggle_button[index].setText('PM')
+
+    def task_modified(self,index):
+        global sort_task_list
         # 수정할 task를 받음
-        modified_task = sort_task_list[index]
         # 키를 변경하기 위해 현재 시간 반환
         old_task_time = list(sort_task_list[index].keys())[0]
-        modified_task_time = "{hours}:{minutes}".format(hours=self.task_time_hours.text(),
-                                                        minutes=self.task_time_minutes.text())
-        modified_task[modified_task_time] = modified_task.pop(old_task_time)
-        modified_task[modified_task_time] = self.text.toPlainText()
+        # self.am_or_pm_toggle_button_button의 텍스트를 들고와서 ap 또는 pm을 설정
+        am_or_pm = self.am_or_pm_toggle_button[index].text()
+        # task_list는 dict 구조라서 새로운 key를 만듬
+        modified_task_time = "{am_or_pm}:{hours}:{minutes}".format(am_or_pm=am_or_pm,
+                                                                   hours=self.task_time_hours[index].text(),
+                                                                   minutes=self.task_time_minutes[index].text())
+        # dict에서 key를 변경해줄때 기존의 dict[새로운key] = dict.pop(기존key)를 하면 키가 바꿔짐
+        # [index][modified_task_time]을 하면 이중구조로 되는줄 알았는데 sort_task_list[index]의 키를 들고옴
+        sort_task_list[index][modified_task_time] = sort_task_list[index].pop(old_task_time)
+        sort_task_list[index][modified_task_time] = self.text[index].toPlainText()
+        #  배열이 바뀌었기 때문에 재 배열 해줘여함
+        sort_task_list = sort_util.task_list_sort(sort_task_list)
 
     def task_delete(self, layout, index, remove=True):
         # task_list[index]를 한 번만 삭제시키기 remove=True 일떄만 삭제
         if remove:
             del sort_task_list[index]
+            del DayManagement.task_list[index]
         # layout자체를 삭제 할 수 없으므로 안에 아이템을 삭제 해야함
         if layout is not None:
             while layout.count():
