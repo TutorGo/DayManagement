@@ -1,9 +1,9 @@
 import sys
 from datetime import datetime, time
 from functools import partial
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QRect
 from PyQt5.QtWidgets import QWidget, QApplication, QGridLayout, QLabel, QPushButton, QHBoxLayout, QLineEdit, QTextEdit, \
-    QDialog, QVBoxLayout, QWidgetItem, QMessageBox, QMainWindow, QRadioButton
+    QVBoxLayout, QMessageBox, QScrollArea
 import time as stime
 import sort_util
 
@@ -165,34 +165,36 @@ class DayManagement(QWidget):
         시간과 할일 목록을 저장하는 함수
         '''
         global sort_task_list
-        # am_pm을 받고 ap_or_pm:시간:분 저장
-        hours_minutes = "{am_or_pm}:{hours}:{minutes}".format(am_or_pm=self.am_pm_toggle_value,
-                                                              hours=self.set_time_hours.text(),
-                                                              minutes=self.set_time_minutes.text())
-        # am_or_pm:시간:분 : 할일 해서 딕셔너리로 저장
-        time_and_task = {hours_minutes: self.set_task_text.toPlainText()}
+        if self.time_check(self.am_pm_toggle_value, self.set_time_hours.text(), self.set_time_minutes.text()):
+            print(111)
+            # am_pm을 받고 ap_or_pm:시간:분 저장
+            hours_minutes = "{am_or_pm}:{hours}:{minutes}".format(am_or_pm=self.am_pm_toggle_value,
+                                                                  hours=self.set_time_hours.text(),
+                                                                  minutes=self.set_time_minutes.text())
+            # am_or_pm:시간:분 : 할일 해서 딕셔너리로 저장
+            time_and_task = {hours_minutes: self.set_task_text.toPlainText()}
 
-        # 시간과 할일을 task_list에 저장한다
-        self.task_list.append(time_and_task)
-
-        sort_task_list = sort_util.task_list_sort(self.task_list)
-
-        # 시간과 할일을 저장 후에 text 칸을 clear 시킨다
-        self.set_time_hours.clear()
-        self.set_time_minutes.clear()
-        self.set_task_text.clear()
-        # 쓰레드는 한 번만 실행되면 되기 떄문에 카운트가 0일 때만 실행 또는 하나만 있을 떄만 실행
-        if self.thread_count == 0 or len(self.task_list) == 1:
-            # TimeThread을 할당
-            self.time_check_thread = TimeThread()
-            # 메인 쓰레드가 종료되면 자식 쓰레드인 self.time_check_thread 종료
-            self.time_check_thread.daemon = True
-            # TimeThread에 있는 messagebox 시그널과 연결
-            self.time_check_thread.messagebox.connect(self.open_message_box)
-            # 쓰레드 실행
-            self.time_check_thread.start()
-            # 한 번만 실행되야 하기때문에 수를 올림
-            self.thread_count += 1
+            # 시간과 할일을 task_list에 저장한다
+            self.task_list.append(time_and_task)
+            sort_task_list = sort_util.task_list_sort(self.task_list)
+            # 시간과 할일을 저장 후에 text 칸을 clear 시킨다
+            self.set_time_hours.clear()
+            self.set_time_minutes.clear()
+            self.set_task_text.clear()
+            # 쓰레드는 한 번만 실행되면 되기 떄문에 카운트가 0일 때만 실행 또는 하나만 있을 떄만 실행
+            if self.thread_count == 0 or len(self.task_list) == 1:
+                # TimeThread을 할당
+                self.time_check_thread = TimeThread()
+                # 메인 쓰레드가 종료되면 자식 쓰레드인 self.time_check_thread 종료
+                self.time_check_thread.daemon = True
+                # TimeThread에 있는 messagebox 시그널과 연결
+                self.time_check_thread.messagebox.connect(self.open_message_box)
+                # 쓰레드 실행
+                self.time_check_thread.start()
+                # 한 번만 실행되야 하기때문에 수를 올림
+                self.thread_count += 1
+        else:
+            pass
 
     def am_pm_toggle(self, toggle):
         '''
@@ -206,6 +208,23 @@ class DayManagement(QWidget):
             # am_or_pm_toggle_buotton버튼의 텍스를 PM으로 변경
             self.am_or_pm_toggle_button.setText('PM')
             self.am_pm_toggle_value = 'PM'
+
+    def time_check(self, am_pm, hour, minute):
+        # 현재 시간을 받아옴
+        now_hour, now_minute = datetime.today().time().hour, datetime.today().time().minute
+        # hour, minute가 숫자인지 검사
+        if not hour.isdigit() or not minute.isdigit():
+            QMessageBox.about(self, 'Error', '시간 or 분에 숫자를 입력해주세요.')
+        elif int(hour) > 12 or int(minute) >= 60:
+            QMessageBox.about(self, 'Error', '시간에 12 이하의 숫자, 분에 59이하의 숫자를 입력해주세요.')
+        elif am_pm == 'PM':
+            # 오후 시간에는 시간이 느리면 저장 불가능
+            # am을 안한 이유는 밤에 작업할때 11:00에 작업중이면 그 다음날 새벽 까지도 작업할 수 있기 때문에 am은 제외
+            if time(int(hour) + 12, int(minute)) < datetime.today().time():
+                QMessageBox.about(self, 'Error', '{}:{}이후의 시간을 입력해주세요.'.format(now_hour, now_minute))
+            else:
+                return True
+        return True
 
 
 class TaskList(QWidget):
@@ -224,16 +243,27 @@ class TaskList(QWidget):
     text = {}
     task_list_delete_button = {}
     task_list_modified_button = {}
+
     def __init__(self):
         super().__init__()
-        self.grid = QGridLayout()
-        print(sort_task_list)
+        # 스크롤 전체 지역을 설정함
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        # 그리드 레이아웃을 감쌀 전체 레이아웃을 설정
+        wrap_layout = QHBoxLayout(self)
+        # scroll안에 들어갈 요소 설정할 위젯 생성
+        self.scrollAreaWidgetContents = QWidget()
+        # 그리드 레이아웃에 스크롤 요소가 들어갈 수 있음
+        self.grid = QGridLayout(self.scrollAreaWidgetContents)
+        # scroll에 설정해줘야 위젯이 나옴
+        scroll.setWidget(self.scrollAreaWidgetContents)
+        scroll.resize(300, 800)
         # 할일 목록 하나당 배정함
-        for index, task in enumerate(sort_task_list):
+        for index, work in enumerate(sort_task_list):
             # 각 할 일 마다 am_or_pm, hours, minutes 구함
-            am_or_pm, hours, minutes = list(task.keys())[0].split(':')
+            am_or_pm, hours, minutes = list(work.keys())[0].split(':')
             # 할 일을 구함
-            task = list(task.values())[0]
+            task = list(work.values())[0]
             # 모든 레이아웃을 감쌀 수직 레이아웃
             self.task_list_wrap_layout[index] = QVBoxLayout()
             # ex)AM:시간:분을 감싸는 수평 레이아웃
@@ -282,9 +312,9 @@ class TaskList(QWidget):
             self.task_list_modified_button[index] = QPushButton('Modified')
 
             # 수정 버튼을 task_modified 함수에 할당 인자를 주기위해 partial 사용
-            self.task_list_modified_button[index].clicked.connect(partial(self.task_modified,index))
+            self.task_list_modified_button[index].clicked.connect(partial(self.task_modified, index))
             self.task_list_delete_button[index].clicked.connect( \
-                partial(self.task_delete, self.task_list_wrap_layout[index], index, True))
+                partial(self.task_delete, self.task_list_wrap_layout[index], list(work.keys())[0], True))
 
             # task_list_button_lalyout에 삭제, 수정 버튼을 추가
             self.task_list_button_layout[index].addWidget(self.task_list_delete_button[index])
@@ -297,8 +327,10 @@ class TaskList(QWidget):
 
             # task_list_wrap_layout을 grid레이아웃에 추가
             self.grid.addLayout(self.task_list_wrap_layout[index], index, 0)
-
-        self.setLayout(self.grid)
+        # 전체 레이아웃에 스크롤을 포함
+        wrap_layout.addWidget(scroll)
+        self.setGeometry(1000, 1, 300, 600)
+        self.setLayout(wrap_layout)
         self.show()
 
     def am_pm_toggle(self, index, toggle):
@@ -313,7 +345,7 @@ class TaskList(QWidget):
             # am_or_pm_toggle_buotton버튼의 텍스를 PM으로 변경
             self.am_or_pm_toggle_button[index].setText('PM')
 
-    def task_modified(self,index):
+    def task_modified(self, index):
         global sort_task_list
         # 수정할 task를 받음
         # 키를 변경하기 위해 현재 시간 반환
@@ -330,12 +362,21 @@ class TaskList(QWidget):
         sort_task_list[index][modified_task_time] = self.text[index].toPlainText()
         #  배열이 바뀌었기 때문에 재 배열 해줘여함
         sort_task_list = sort_util.task_list_sort(sort_task_list)
+        # 수정했을떄 페이지를 갱신함
+        self.close()
+        TaskList().show()
 
-    def task_delete(self, layout, index, remove=True):
+    def task_delete(self, layout, key, remove):
+        global sort_task_list
         # task_list[index]를 한 번만 삭제시키기 remove=True 일떄만 삭제
         if remove:
-            del sort_task_list[index]
-            del DayManagement.task_list[index]
+            # key를 이용해서 리스트안에 있는 딕을 제거
+            # 이유는 a(0),b(1),c(2) 가 있을때 b를 지우면 a(0),c(1) 되지만 나의 메모리에서는 c의 인덱스가 2라고 저장 되어있기떄문에 오류가남
+            for index,task in enumerate(sort_task_list):
+                if key == list(task.keys())[0]:
+                    del sort_task_list[index]
+                    del DayManagement.task_list[index]
+                    # sort_task_list[index].remove()
         # layout자체를 삭제 할 수 없으므로 안에 아이템을 삭제 해야함
         if layout is not None:
             while layout.count():
@@ -344,9 +385,8 @@ class TaskList(QWidget):
                 if widget is not None:
                     widget.deleteLater()
                 else:
-                    self.task_delete(item.layout(), index, remove=False)
-        # 레이아웃 재 설정
-        self.setGeometry(300, 300, 400, 300)
+                    self.task_delete(item.layout(), key, remove=False)
+                    # 레이아웃 재 설정
 
 
 if __name__ == '__main__':
