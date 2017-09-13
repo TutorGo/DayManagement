@@ -33,7 +33,8 @@ class TimeThread(QThread):
         latest_time_keys = list(sort_task_list[0].keys())[0].split(':')
         # self.am_pm_toggle_value가 PM 이면 12를 더해줘여함 datetime에서 1시는 13시로 표현함
         if latest_time_keys[0] == 'PM':
-            self.latest_time_hour = int(latest_time_keys[1]) + 12
+            if not latest_time_keys[1] == '12':
+                self.latest_time_hour = int(latest_time_keys[1]) + 12
             self.latest_time_minute = int(latest_time_keys[2])
         # AM 12시는 datetime에서 0시로 표현
         elif latest_time_keys[0] == 'AM' and latest_time_keys[1] == '12':
@@ -53,12 +54,18 @@ class TimeThread(QThread):
                 break
             # 제일 처음 task의 시간, 분 을 받아옴
             hour, minute = self.latest_task_time()
-            stime.sleep(20)
-            # 현재시각이랑 비교해서 현재시각이 더 크면 메세지 박스 불러옴
-            if datetime.today().time() >= time(hour, minute):
+            # 현재 시간 분을 받아옴
+            now_hour = datetime.today().time().hour
+            now_minute = datetime.today().time().minute
+            stime.sleep(30)
+            # 현재시각을 task_list 제일 처음의 시각을 받아서 비교해서 시간과 분이 같으면 메세지 실행
+            if now_hour == hour and now_minute == minute:
+                # print(datetime.today().time())
+                # print(time(hour,minute))
                 # 메인 view에서 messagebox와 connect와 연결된 함수를 싱햄
                 self.messagebox.emit()
                 # os.system('open /Users/goseonghyeon/study/ScheduleManagement/black.mp3')
+                stime.sleep(0.5)
                 sort_task_list.pop(0)
 
 
@@ -157,16 +164,12 @@ class DayManagement(QWidget):
         self.see_task_new_window = TaskList()
         self.see_task_new_window.show()
 
-    def open_message_box(self):
-        QApplication.alert(QMessageBox.about(self, 'gdsagdsa', 'gdsaasgdsa'))
-
     def task_save(self):
         '''
         시간과 할일 목록을 저장하는 함수
         '''
         global sort_task_list
         if self.time_check(self.am_pm_toggle_value, self.set_time_hours.text(), self.set_time_minutes.text()):
-            print(111)
             # am_pm을 받고 ap_or_pm:시간:분 저장
             hours_minutes = "{am_or_pm}:{hours}:{minutes}".format(am_or_pm=self.am_pm_toggle_value,
                                                                   hours=self.set_time_hours.text(),
@@ -175,8 +178,8 @@ class DayManagement(QWidget):
             time_and_task = {hours_minutes: self.set_task_text.toPlainText()}
 
             # 시간과 할일을 task_list에 저장한다
-            self.task_list.append(time_and_task)
-            sort_task_list = sort_util.task_list_sort(self.task_list)
+            sort_task_list.append(time_and_task)
+            sort_task_list = sort_util.task_list_sort(sort_task_list)
             # 시간과 할일을 저장 후에 text 칸을 clear 시킨다
             self.set_time_hours.clear()
             self.set_time_minutes.clear()
@@ -196,6 +199,13 @@ class DayManagement(QWidget):
         else:
             pass
 
+    def open_message_box(self):
+        global sort_task_list
+        # alert은 밑에 알림창을 울리게 함 그리고 이 메시지 박스는 내가 보고 있는 화면에 띄워짐
+        QApplication.alert(QMessageBox.about(self, 'Message', '{time}\n{task}'.format( \
+                                            time=list(sort_task_list[0].keys())[0],
+                                            task=list(sort_task_list[0].values())[0])))
+
     def am_pm_toggle(self, toggle):
         '''
         self.am_or_pm_toggle_button을 클릭하면 실행되는 함수로 AM PM을 설정한다
@@ -213,15 +223,20 @@ class DayManagement(QWidget):
         # 현재 시간을 받아옴
         now_hour, now_minute = datetime.today().time().hour, datetime.today().time().minute
         # hour, minute가 숫자인지 검사
-        if not hour.isdigit() or not minute.isdigit():
+        if not hour.isdigit() or not minute.isdigit() or hour == '' or minute == '':
             QMessageBox.about(self, 'Error', '시간 or 분에 숫자를 입력해주세요.')
+            return False
         elif int(hour) > 12 or int(minute) >= 60:
             QMessageBox.about(self, 'Error', '시간에 12 이하의 숫자, 분에 59이하의 숫자를 입력해주세요.')
+            return False
         elif am_pm == 'PM':
             # 오후 시간에는 시간이 느리면 저장 불가능
             # am을 안한 이유는 밤에 작업할때 11:00에 작업중이면 그 다음날 새벽 까지도 작업할 수 있기 때문에 am은 제외
-            if time(int(hour) + 12, int(minute)) < datetime.today().time():
+            if not hour == '12':
+                hour = int(hour) + 12
+            if time(int(hour), int(minute)) < datetime.today().time():
                 QMessageBox.about(self, 'Error', '{}:{}이후의 시간을 입력해주세요.'.format(now_hour, now_minute))
+                return False
             else:
                 return True
         return True
@@ -371,12 +386,10 @@ class TaskList(QWidget):
         # task_list[index]를 한 번만 삭제시키기 remove=True 일떄만 삭제
         if remove:
             # key를 이용해서 리스트안에 있는 딕을 제거
-            # 이유는 a(0),b(1),c(2) 가 있을때 b를 지우면 a(0),c(1) 되지만 나의 메모리에서는 c의 인덱스가 2라고 저장 되어있기떄문에 오류가남
-            for index,task in enumerate(sort_task_list):
+            # 이유는 a(0),b(1),c(2) 가 있을때 b를 지우면 a(0),c(1) 되지만 나의 메모리에서는 c의 인덱스가 2라고 저장 되어있기떄문
+            for index, task in enumerate(sort_task_list):
                 if key == list(task.keys())[0]:
                     del sort_task_list[index]
-                    del DayManagement.task_list[index]
-                    # sort_task_list[index].remove()
         # layout자체를 삭제 할 수 없으므로 안에 아이템을 삭제 해야함
         if layout is not None:
             while layout.count():
