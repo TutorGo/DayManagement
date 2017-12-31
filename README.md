@@ -2,7 +2,7 @@
 # DayManagement
 
 ### 1. 메인화면
-<img src="./image/main.png" width="500" margin="0 auto">
+<img src="./image/main.png" width="500">
 
 #### 1.AM PM Toggle
 - AM 또는 PM으로 시간을 설정합니다. 클릭하면 AM 바뀝니다.
@@ -10,7 +10,7 @@
 
 #### 2. TIME
 - 시간을 설정합니다. 시간은 11 이하의 숫자, 분은 59 이하의 숫자만 입력 가능합니다. 만약 그 이상의 수를 입력하면 오류 메시지가 출력됩니다.
-- <img src="./image/time_input_error.png" alt="Drawing" style="width: 300px; display:block; margin:0 auto;"/>
+- <img src="./image/time_input_error.png" width="500">
 
 #### 3. TASK
 - 해야 할 일을 입력합니다 
@@ -20,7 +20,7 @@
 
 #### 5. task list
 - 해야할 일들의 목록을 보여줍니다
-- <img src="./image/tasklist.png" alt="Drawing" style="width: 300px; height: 500px; display:block; margin:0 auto;"/>
+- <img src="./image/tasklist.png" width="400">
 	- Delete
 		- 할 일을 삭제하고 시간 순서대로 재정렬 합니다.
 	- Modified
@@ -28,7 +28,7 @@
 
 #### 6. 알람
 
-1. <img src="./image/complete.png" alt="Drawing" style="width: 300px; display:block; margin:0 auto;"/>
+1. <img src="./image/complete.png" width="400">
 	- 아이콘이 화면 아래에서 튀어 오릅니다.
 
  
