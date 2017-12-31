@@ -2,7 +2,7 @@
 # DayManagement
 
 ### 1. 메인화면
-<img src="./image/main.png" width="300">
+<img src="./image/main.png" width="500" margin="0 auto">
 
 #### 1.AM PM Toggle
 - AM 또는 PM으로 시간을 설정합니다. 클릭하면 AM 바뀝니다.
