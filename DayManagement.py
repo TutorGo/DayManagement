@@ -50,6 +50,7 @@ class TimeThread(QThread):
         global sort_task_list
         # 시간을 체크함
         while True:
+            print(sort_task_list)
             if sort_task_list == []:
                 break
             # 제일 처음 task의 시간, 분 을 받아옴
@@ -185,7 +186,9 @@ class DayManagement(QWidget):
             self.set_time_minutes.clear()
             self.set_task_text.clear()
             # 쓰레드는 한 번만 실행되면 되기 떄문에 카운트가 0일 때만 실행 또는 하나만 있을 떄만 실행
-            if self.thread_count == 0 or len(self.task_list) == 1:
+            if self.thread_count == 0 or len(sort_task_list) == 1:
+                print(self.thread_count)
+                print(len(self.task_list))
                 # TimeThread을 할당
                 self.time_check_thread = TimeThread()
                 # 메인 쓰레드가 종료되면 자식 쓰레드인 self.time_check_thread 종료
