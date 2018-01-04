@@ -4,6 +4,7 @@ reated by https://www.gitignore.io/api/macos,python,pycharm
 *.DS_Store
 .AppleDouble
 .LSOverride
+__pycache__
 
 #custome
 .idea/*
